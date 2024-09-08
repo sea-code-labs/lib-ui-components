@@ -1,0 +1,243 @@
+image: seacodelabs/node20-chromium:latest
+
+pipelines:
+  pull-requests:
+    # Pull request from feature-* to develop
+    'feature-*':
+      - step:
+          # Validate that the branch name starts with 'feature-'
+          name: Validate Branch Name
+          script:
+            - echo "Validating branch name..."
+            - |
+              # Ensure the branch name starts with 'feature-'
+              if [[ ! "$BITBUCKET_BRANCH" =~ ^feature- ]]; then
+                echo "Error: Branch name must start with 'feature-'."
+                exit 1
+              fi
+
+              echo "Branch name validation passed."
+
+      - step:
+          # Check if the source branch of the PR is 'develop' when merging into 'main'
+          name: Check PR Source for Main
+          script:
+            - echo "Checking if PR target is 'main'..."
+            - |
+              # Ensure the destination branch is 'main' and the source branch is 'develop'
+              if [ "$BITBUCKET_PR_DESTINATION_BRANCH" = "main" ] && [ "$BITBUCKET_BRANCH" != "develop" ]; then
+                echo "Error: PR to 'main' must come from 'develop'."
+                exit 1
+              fi
+
+    # Pull request from develop to main
+    develop:
+      - step:
+          # Check if the source branch of the PR is 'develop' when merging into 'main'
+          name: Check PR Source for Main
+          script:
+            - echo "Checking if PR source is 'develop'..."
+            - |
+              # Ensure the destination branch is 'main' and the source branch is 'develop'
+              if [ "$BITBUCKET_PR_DESTINATION_BRANCH" = "main" ] && [ "$BITBUCKET_BRANCH" != "develop" ]; then
+                echo "Error: PR to 'main' must come from 'develop'."
+                exit 1
+              else
+                echo "PR source branch is 'develop'."
+              fi
+
+  branches:
+    # Branch feature-* (push)
+    feature-*:
+      - step:
+          # Validate that the branch name starts with 'feature-'
+          name: Validate Branch Name
+          script:
+            - echo "Validating branch name..."
+            - |
+              # Ensure the branch name starts with 'feature-'
+              if [[ ! "$BITBUCKET_BRANCH" =~ ^feature- ]]; then
+                echo "Error: Branch name must start with 'feature-'."
+                exit 1
+              fi
+
+              echo "Branch name validation passed."
+
+      - step:
+          # Install dependencies and save cache for subsequent steps
+          name: Install Dependencies and Cache
+          caches:
+            - node
+          script:
+            - echo "Installing dependencies..."
+            - npm install
+
+      - step:
+          # Run tests to validate the changes on the feature branch
+          name: Run Tests
+          caches:
+            - node
+          script:
+            - |
+              if find projects/ -name '*.spec.ts' | grep . > /dev/null; then
+                echo ".spec.ts files found. Running tests..."
+                npx ng test --watch=false
+              else
+                echo "No .spec.ts files found. Skipping tests."
+              fi
+
+    develop:
+      - step:
+          # Install dependencies and save cache for subsequent steps
+          name: Install Dependencies and Cache
+          caches:
+            - node
+          script:
+            - echo "Installing dependencies..."
+            - npm install
+
+      - step:
+          # Run tests to validate the changes on the develop branch
+          name: Run Tests
+          caches:
+            - node
+          script:
+            - |
+              if find projects/ -name '*.spec.ts' | grep . > /dev/null; then
+                echo ".spec.ts files found. Running tests..."
+                npx ng test --watch=false
+              else
+                echo "No .spec.ts files found. Skipping tests."
+              fi
+
+      - step:
+          name: Delete merged feature branch
+          script:
+            - git fetch origin
+            - |
+              echo "Current branch is -> $BITBUCKET_BRANCH"
+              recent_merge_info=$(git log --first-parent --merges $BITBUCKET_BRANCH -1 --oneline)
+              source_branch=$(echo "$recent_merge_info" | grep -o 'feature-[^ ]*')
+
+              if [ -z "$source_branch" ]; then
+                echo "No merged feature branch found."
+                exit 1
+              else
+                echo "Found merged feature branch -> $source_branch. Deleting it..."
+                git push origin --delete "$source_branch"
+                echo "Branch $source_branch has been deleted from origin."
+              fi
+
+      - step:
+          # Sync the Bitbucket repository with the GitHub mirror
+          name: Sync GitHub Mirror
+          clone:
+            enabled: false
+          script:
+            - echo "Cloning Bitbucket repository as a bare clone..."
+            # Perform a bare clone of the Bitbucket repository
+            - git clone --bare git@bitbucket.org:sea-code-labs/lib-ui-components.git
+            - cd lib-ui-components.git
+            - echo "Pushing to GitHub mirror..."
+            # Push all refs to the GitHub mirror
+            - git push --mirror git@github.com:sea-code-labs/lib-ui-components.git
+
+      - step:
+          name: Build & Publish Dev
+          script:
+            - npm config set @sea-code-themes:registry https://registry.npmjs.org/
+            - npm config set //registry.npmjs.org/:_authToken $NPM_TOKEN
+            - npm install -g @angular/cli
+            - npm install
+            - |
+              find projects/libs -maxdepth 1 -mindepth 1 -type d | while read -r lib; do
+                [ -f "$lib/package.json" ] || continue
+                cd "$lib" || exit
+                if git diff --quiet HEAD^ HEAD --; then
+                  echo "No changes detected in $(basename "$lib")"
+                else
+                  npm install
+                  ng build --configuration production
+                  cd ../../../ || exit
+                  cd "dist/$(basename "$lib")" || exit
+                  npm version prerelease --preid=dev --no-git-tag-version
+
+                  if npm publish --access public --tag dev 2>&1 | grep -q 'cannot publish over the previously published versions'; then
+                    echo "Version already exists, skipping publish for $(basename "$lib")"
+                  else
+                    echo "Published $(basename "$lib")"
+                  fi
+
+                  cd - || exit
+                  sleep 10
+                fi
+              done
+
+    main:
+      - step:
+          # Install dependencies and save cache for subsequent steps
+          name: Install Dependencies and Cache
+          caches:
+            - node
+          script:
+            - echo "Installing dependencies..."
+            - npm install
+
+      - step:
+          # Run tests to validate the changes on the main branch
+          name: Run Tests
+          caches:
+            - node
+          script:
+            - |
+              if find projects/ -name '*.spec.ts' | grep . > /dev/null; then
+                echo ".spec.ts files found. Running tests..."
+                npx ng test --watch=false
+              else
+                echo "No .spec.ts files found. Skipping tests."
+              fi
+
+      - step:
+          # Sync the Bitbucket repository with the GitHub mirror
+          name: Sync GitHub Mirror
+          clone:
+            enabled: false
+          script:
+            - echo "Cloning Bitbucket repository as a bare clone..."
+            # Perform a bare clone of the Bitbucket repository
+            - git clone --bare git@bitbucket.org:sea-code-labs/lib-ui-components.git
+            - cd lib-ui-components.git
+            - echo "Pushing to GitHub mirror..."
+            # Push all refs to the GitHub mirror
+            - git push --mirror git@github.com:sea-code-labs/lib-ui-components.git
+
+      - step:
+          name: Build & Publish Prod
+          script:
+            - npm config set @sea-code-themes:registry https://registry.npmjs.org/
+            - npm config set //registry.npmjs.org/:_authToken $NPM_TOKEN
+            - npm install
+            - npm install -g @angular/cli
+            - |
+              find projects/libs -maxdepth 1 -mindepth 1 -type d | while read -r lib; do
+                [ -f "$lib/package.json" ] || continue
+                cd "$lib" || exit
+                if git diff --quiet HEAD^ HEAD --; then
+                  echo "No changes detected in $(basename "$lib")"
+                else
+                  npm install
+                  ng build --configuration production
+                  cd "../../../" || exit
+                  cd "dist/$(basename "$lib")" || exit
+                  npm version patch --no-git-tag-version
+
+                  if npm publish --access public 2>&1 | grep -q 'cannot publish over the previously published versions'; then
+                    echo "Version already exists, skipping publish for $(basename "$lib")"
+                  else
+                    echo "Published $(basename "$lib")"
+                  fi
+
+                  cd - || exit
+                  sleep 10
+                fi
+              done
