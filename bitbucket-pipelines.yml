@@ -145,7 +145,7 @@ pipelines:
       - step:
           name: Build & Publish Dev
           script:
-            - npm config set @sea-code-themes:registry https://registry.npmjs.org/
+            - npm config set @sea-code-ui:registry https://registry.npmjs.org/
             - npm config set //registry.npmjs.org/:_authToken $NPM_TOKEN
             - npm install -g @angular/cli
             - npm install
@@ -214,7 +214,7 @@ pipelines:
       - step:
           name: Build & Publish Prod
           script:
-            - npm config set @sea-code-themes:registry https://registry.npmjs.org/
+            - npm config set @sea-code-ui:registry https://registry.npmjs.org/
             - npm config set //registry.npmjs.org/:_authToken $NPM_TOKEN
             - npm install
             - npm install -g @angular/cli
