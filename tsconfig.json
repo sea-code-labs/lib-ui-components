@@ -23,6 +23,7 @@
     "lib": ["ES2022", "dom"],
     "paths": {
       "colors": ["./dist/colors"],
+      "layouts": ["./dist/layouts"],
       "spacing": ["./dist/spacing"],
       "typography": ["./dist/typography"]
     }
