@@ -1,0 +1,9 @@
+<div class="container" [ngClass]="{ 'breakpoint-reached': isBreakpointReached() }" [style.gap.px]="gap">
+  <aside class="aside">
+    <ng-content select="[aside]" />
+  </aside>
+
+  <main class="main">
+    <ng-content select="[main]" />
+  </main>
+</div>
