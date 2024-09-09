@@ -19,6 +19,11 @@ of user-friendly interfaces.
 npm install @sea-code-ui/layouts
 ```
 
+## Available Layouts
+
+1. Grid 4-8 (sc-grid-4-8)
+2. Grid 8-4 (sc-grid-8-4)
+
 ## Documentation
 
 For detailed information about this library,

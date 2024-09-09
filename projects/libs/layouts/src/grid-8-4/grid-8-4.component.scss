@@ -1,0 +1,36 @@
+$full: 100%;
+
+:host {
+  display: block;
+  height: $full;
+  width: $full;
+}
+
+.container {
+  display: flex;
+  flex-direction: row;
+  height: $full;
+  width: $full;
+}
+
+.main {
+  flex: 3 1 auto;
+}
+
+.aside {
+  flex: 1 0 auto;
+}
+
+.container.breakpoint-reached {
+  flex-direction: column;
+}
+
+.breakpoint-reached .main {
+  order: 1;
+  width: $full;
+}
+
+.breakpoint-reached .aside {
+  order: 2;
+  width: $full;
+}
